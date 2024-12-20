@@ -17,7 +17,7 @@ function Get-Albums([string]$serie) {
             if ($match_es.Success) { # series name
                 $series.name = $match_es.Groups[2].Value
             } else { # error
-                $series.name = "error/name"
+                $series.name = "error/match/series"
                 return $series
             }
         } # match album code & title                                                                                                                                             $album.code              $album.title
@@ -27,7 +27,7 @@ function Get-Albums([string]$serie) {
                 $series.albums += @{code = $ma_tch.Groups[1].Value; title = $ma_tch.Groups[2].Value}
             }
         } else { # error
-            $series.name = "error/albums"
+            $series.name = "error/match/albums"
             return $series
         } # check next page
         $match_es = ($response.Content | Select-String -Pattern "<li><a href=`".*`" data-value=`".*`">次へ</a></li>").Matches

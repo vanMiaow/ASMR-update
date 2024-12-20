@@ -12,9 +12,18 @@
 . "$PSScriptRoot/Get-Name.ps1"
 # set delay in milliseconds
 $delay = 100
-# exclude series
-$exclude = @(
-    "SRI0000026662"
+# excluded series
+$exclSeries = @(
+    "SRI0000040622"
+)
+# excluded albums
+$exclAlbums = @(
+    # SRI0000020252
+    "RJ226470", "RJ234748", "RJ243180", "RJ253788", "RJ264095", "RJ270613", "RJ285211", "RJ296718", "RJ311537"
+    # SRI0000025177
+    "RJ383035"
+    # SRI0000030712
+    "RJ352446", "RJ394256", "RJ01018608", "RJ01018618", "RJ01190092", "RJ01268906"
 )
 
 # fine all directories that match "[code] title" recursively
@@ -58,9 +67,9 @@ $unknown = $unknown | Sort-Object -Property {$_.series}, {$_.code.Length}, {$_.c
 # collect all series
 $series = @()
 foreach ($serie in $unknown.series | Select-Object -Unique) {
-    if ($serie -eq "error" -or $serie -eq "single") { # error & single
-        $series += @{code = $serie; name = $serie -replace "^(\w)", {$_.Value.ToUpper()}; albums = $unknown | Where-Object -FilterScript {$_.series -eq $serie} | Select-Object -Property code, title}
-    } elseif ($serie -in $exclude) { # excluded series
+    if ($serie -eq "error/web" -or $serie -eq "single") { # error/web & single
+        $series += @{code = $serie; name = $serie; albums = $unknown | Where-Object -FilterScript {$_.series -eq $serie} | Select-Object -Property code, title}
+    } elseif ($serie -in $exclSeries) { # excluded series
         $series += @{code = $serie; name = "~~$(Get-Name $serie)~~"; albums = $unknown | Where-Object -FilterScript {$_.series -eq $serie} | Select-Object -Property code, title}
     } else { # series
         # append series, get name & albums from remote
@@ -69,7 +78,11 @@ foreach ($serie in $unknown.series | Select-Object -Unique) {
         # mark archived albums
         foreach ($album in $series[-1].albums) {
             if ($album.code -notin $unknown.code) {
-                $album.title = "**$($album.title)**"
+                if ($album.code -in $exclAlbums) {
+                    $album.title = "~~$($album.title)~~"
+                } else {
+                    $album.title = "**$($album.title)**"
+                }
             }
         }
     }
@@ -84,19 +97,39 @@ foreach ($serie in $series | Where-Object -FilterScript {$_.code -ne "error"}) {
     }
     $string | Out-File $markdown -Append
 }
-"</div>" | Out-File $markdown -Append
-"" | Out-File $markdown -Append
+"</div>`n" | Out-File $markdown -Append
 # write series
 foreach ($serie in $series) {
-    if ($serie.code -eq "error" -or $serie.code -eq "single") { # error & single
-        "| |$($serie.name)|search|" | Out-File $markdown -Append
-    } else { # series
-        "|<a href='$(Get-Url "series" $serie.code)' target='_blank'>$($serie.code)</a>|$($serie.name)|search|" | Out-File $markdown -Append
+    # disclose details if unarchived albums in series
+    if ("**" -in $serie.albums.title.substring(0, 2)) {
+        $details = "<p><details open>"
+    } else {
+        $details = "<p><details>"
     }
-    "|-|------|:----:|" | Out-File $markdown -Append
+    # remove ^~~ & ~~$ in summary series name
+    $summary = $serie.name
+    if ($summary.substring(0, 2) -eq "~~") {
+        $summary = $summary.substring(2, $summary.length - 4)
+    }
+    $summary = "<summary><b>$summary</b></summary>"
+    # details
+    "$details$summary`n" | Out-File $markdown -Append
+    # link for series
+    if ($serie.code -eq "error/web" -or $serie.code -eq "single") { # error/web & single
+        $a = " "
+    } else { # series
+        $a = "<a href='$(Get-Url "series" $serie.code)' target='_blank'>$($serie.code)</a>"
+    }
+    # table
+    # series
+    "|$a|$($serie.name)|search|" | Out-File $markdown -Append
+    # separator
+    "|-|-|:-:|" | Out-File $markdown -Append
     foreach ($album in $serie.albums) {
+        # albums
         "|<a href='$(Get-Url "album" $album.code)' target='_blank'>$($album.code)</a>|$($album.title)|<a href='$(Get-Url "asmr" $album.code)' target='_blank'>:mag:</a>|" | Out-File $markdown -Append
     }
-    "" | Out-File $markdown -Append
+    # details end
+    "</details></p>`n" | Out-File $markdown -Append
 }
 Start-Process gvim "$markdown -c `"normal ,mt`""

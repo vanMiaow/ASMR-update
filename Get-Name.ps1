@@ -10,6 +10,6 @@ function Get-Name([string]$serie) {
     if ($match_es.Success) { # series name
         return $match_es.Groups[2].Value
     } else { # error
-        return "error/name"
+        return "error/match/series"
     }
 }
