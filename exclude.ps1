@@ -1,0 +1,8 @@
+
+# excludes
+$exclSeries = @(
+    "SINGLE"
+)
+$exclAlbums = @(
+)
+
