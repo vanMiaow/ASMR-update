@@ -53,9 +53,12 @@ foreach ($code in $local) {
         if ($series.excl) {
         # if series excluded, get album and append
             $album = Get-Album $code
-            foreach ($series_ in $asmr) {
-                if ($series_.code -eq $series.code) {
-                    $series_.albums += $album
+            # do not append if error
+            if ($album.title -ne "Get-Album.Error.Title") {
+                foreach ($series_ in $asmr) {
+                    if ($series_.code -eq $series.code) {
+                        $series_.albums += $album
+                    }
                 }
             }
         }
