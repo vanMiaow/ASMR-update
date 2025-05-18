@@ -66,7 +66,7 @@ function Html-Tag([string]$tag, [string[]]$inner) {
     )
 }
 
-# details, open? by default
+# details, open?ed by default
 function Html-Details([string[]]$inner, [bool]$open = $false) {
     if ($open) {
         $attr = " open"
@@ -150,12 +150,22 @@ function Html-Table([string[][]]$tds) {
     return Html-Tag "table" $trs
 }
 
+# series details with link, circle?, title and table of albums, open?ed by default
 function Html-Series([hashtable]$series, [bool]$open, [string[][]]$albums) {
+    $circle = $series.circle.name
+    if ($circle) {
+        $circle = "[$circle] "
+    }
+    # details
     return Html-Details @(
+        # summary
         Html-Tag "summary" @(
+            # link of DLsite
             Html-Link "dlsite" $series.code
-            Html-Span $series.title $true
+            # series title with circle name if avaliable
+            Html-Span "$circle$($series.title)" $true
         )
+        # table
         Html-Table $albums
     ) $open
 }
