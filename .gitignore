@@ -2,4 +2,6 @@
 !/.gitignore
 !/exclude.ps1
 !/function.ps1
+!/html.ps1
+!/lyrics.ps1
 !/update.ps1

@@ -2,19 +2,13 @@
 # Get-DLsite
 function Get-DLsite([string]$code, [int]$page = 1) {
     $prefix = $code.Substring(0, 2)
-    if ($prefix -eq "BJ" -or $prefix -eq "TI") { # BJ
-        $type = "books"
+    if ($prefix -eq "RJ") { # album
+        return "https://www.dlsite.com/maniax/work/=/product_id/$code.html"
+    } elseif ($prefix -eq "SR") { # series
+        return "https://www.dlsite.com/maniax/fsr/=/title_id/$code/order/release/per_page/100/page/$page"
+    } else { # error
+        return "https://www.dlsite.com/maniax/works/type/=/work_type_category/audio"
     }
-    if ($prefix -eq "RJ" -or $prefix -eq "SR") { # RJ
-        $type = "maniax"
-    }
-    if ($prefix -eq "BJ" -or $prefix -eq "RJ") { # album
-        return "https://www.dlsite.com/$type/work/=/product_id/$code.html"
-    }
-    if ($prefix -eq "TI" -or $prefix -eq "SR") { # series
-        return "https://www.dlsite.com/$type/fsr/=/title_id/$code/order/release/per_page/100/page/$page"
-    }
-    return "Get-DLsite.Error.Prefix" # error
 }
 
 # Get-ASMR
@@ -28,12 +22,12 @@ function Get-Response([string]$url, [int]$delay = 100, [int]$retry = 10) {
         # delay
         Start-Sleep -Milliseconds $delay
         # web request
-        try {$res = Invoke-WebRequest $url} catch {} # web request
+        try { $res = Invoke-WebRequest $url } catch {} # web request
         if ($res.StatusCode -eq 200) {
             return $res.Content # success
         }
     }
-    return "Get-Response.Error.Web" # error
+    return "Error.Get-Response.Web" # error
 }
 
 # Get-Album
@@ -41,28 +35,47 @@ function Get-Album([string]$code) {
     # web request
     $res = Get-Response (Get-DLsite $code)
     # match title
-    if ($res -match "<h1 itemprop=`"name`" id=`"work_name`">\s*(.+)\s*</h1>") {
-        return @{code = $code; title = $matches[1]; arch = $true; excl = $false}
+    if ($res -match '<h1 itemprop="name" id="work_name">(.+)</h1>') {
+        $title = $matches[1]
     } else {
-        return @{code = $code; title = "Get-Album.Error.Title"; arch = $true; excl = $false}
+        $title = "Error.Get-Album.Title"
     }
+    # match circle
+    if ($res -match '<a href=".+/maker_id/(\w+).html">(.+)</a>') {
+        $circle = @{ code = $matches[1]; name = $matches[2] }
+    } else {
+        $circle = @{ code = "Error.Get-Album.Circle.Code"; name = "Error.Get-Album.Circle.Name" }
+    }
+    # match series
+    if ($res -match '<a href=".+/title_id/(\w+)/.+titles">(.+)</a>') {
+        $series = @{ code = $matches[1]; title = $matches[2] }
+    } else {
+        $series = @{ code = "SINGLE"; title = "Single" }
+    }
+    # match artist
+    if ($res -match '<th>声優</th>\s+<td>(?s:.+?)</td>') {
+        $artist = (([regex]'>(.+)</a>').Matches($matches[0]) | ForEach-Object { $_.Groups[1].Value }) -join " / "
+    } else {
+        $artist = "Error.Get-Album.Artist"
+    }
+    # match cover
+    if ($res -match '<div data-src="(.+img_main.jpg)".+></div>') {
+        $cover = "https:" + $matches[1]
+    } else {
+        $cover = "Error.Get-Album.Cover"
+    }
+    # match translation
+    if ($res -match '<p class="work_label">言語の選択</p>') {
+        $trans = $true
+    } else {
+        $trans = $false
+    }
+    return @{ code = $code; title = $title; circle = $circle; series = $series; artist = $artist; cover = $cover; trans = $trans }
 }
 
 # Get-Series
 function Get-Series([string]$code) {
-    # web request
-    $res = Get-Response (Get-DLsite $code)
-    # match series
-    if ($res -match "<th>\s*シリーズ名\s*</th>\s*<td>\s*<a href=`".*/title_id/(\w+)/.*`">\s*(.+)\s*</a>\s*</td>") {
-        return @{code = $matches[1]; title = $matches[2]; excl = $false; albums = @()} # series
-    } else {
-        return @{code = "SINGLE"; title = "Single"; excl = $false; albums = @()} # single
-    }
-}
-
-# Get-Albums
-function Get-Albums([string]$code) {
-    # initialize
+    # init
     $albums = @()
     $page = 0
     while ($true) {
@@ -70,17 +83,29 @@ function Get-Albums([string]$code) {
         $page++
         # web request
         $res = Get-Response (Get-DLsite $code $page)
+        if (-not $title) { # first
+            # match title
+            if ($res -match '<span itemprop="name">「(.+)」シリーズ</span>') {
+                $title = $matches[1]
+            } else {
+                $title = "Error.Get-Series.Title"
+            }
+            # match circle
+            if ($res -match '<a.+\s+href=".+/maker_id/(\w+).html">\s+<span itemprop="name">(.+)</span>') {
+                $circle = @{ code = $matches[1]; name = $matches[2] }
+            } else {
+                $circle = @{ code = "Error.Get-Series.Circle.Code"; name = "Error.Get-Series.Circle.Name" }
+            }
+        }
         # match albums
-        $matches = ($res | Select-String "<div class=`"multiline_truncate`">\s*<a href=`".*/product_id/(\w+).html`" title=`".*`">\s*(.+)\s*</a>\s*</div>" -AllMatches).Matches
-        # append album
-        foreach ($match in $matches) {
-            $albums += @{code = $match.Groups[1].Value; title = $match.Groups[2].Value; arch = $false; excl = $false}
+        ([regex]'<img src=".+" :src="is_show.+(//img.+/(\w+)_img_main.jpg).+" alt="(.+) \[.+\]">').Matches($res) | ForEach-Object {
+            $albums += @{ code = $_.Groups[2].Value; title = $_.Groups[3].Value; cover = "https:" + $_.Groups[1].Value }
         }
         # check next page
-        if ($res -notmatch "<li>\s*<a href=`".*`" data-value=`".*`">\s*次へ\s*</a>\s*</li>") {
+        if ($res -notmatch '<a href=".+" data-value=".+">次へ</a>') {
             break # last page, return
         }
     }
-    return $albums
+    return @{ code = $code; title = $title; circle = $circle; albums = $albums }
 }
 

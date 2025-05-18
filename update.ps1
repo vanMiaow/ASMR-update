@@ -1,160 +1,142 @@
 
-# asmr = [{code, title, excl, albums = [{code, title, arch, excl}]}]
+# album = { code, title, circle = { code, name }, series = { code, title }, artist, cover, trans }
+# series = { code, title, circle = { code, name }, albums = [{ code, title, cover }] }
+# asmr = { "code" = album }
+
+param(
+    [Parameter(ParameterSetName = "Update")]
+    [switch]$Init,
+    [Parameter(ParameterSetName = "Update")]
+    [switch]$Lyrics,
+    [Parameter(ParameterSetName = "View", Mandatory)]
+    [switch]$View
+)
 
 # paths
 . "$PSScriptRoot/exclude.ps1"
 . "$PSScriptRoot/function.ps1"
+. "$PSScriptRoot/html.ps1"
 $lib  = "$PSScriptRoot/.."
 $json = "$PSScriptRoot/asmr.json"
 $md   = "$PSScriptRoot/asmr.md"
 
-if (Test-Path $json) {
-# if json does exist, load database
+#---- View ---->
+
+if ($View) {
+    if (Test-Path $md) {
+        Start-Process nvim "$md +normal,v" -Wait -NoNewWindow
+    } else {
+        echo "Markdown not found."
+    }
+    return
+}
+
+#---- Update ---->
+
+# init asmr
+if ($Init -or -not (Test-Path $json)) {
+    echo "Initialize database."
+    $asmr = @{}
+} else {
     echo "Load database."
     $asmr = Get-Content $json | ConvertFrom-Json -AsHashtable
-} else {
-# if json does not exist, initialize database
-    echo "Initialize database."
-    $asmr = @()
 }
-# mark excluded series
-echo "Mark excluded series."
-foreach ($series in $asmr) {
-    $series.excl = $series.code -in $exclSeries
-}
-# get local albums
+
+# get local
 echo "Get loacl albums."
-$local = (Get-ChildItem $lib "[*]*" -Directory -Recurse).Name
-$local = @($local | ForEach-Object {$_.Substring(1, $_.IndexOf(']') - 1)})
+$localDir = Get-ChildItem $lib "[*]*" -Directory -Recurse
+$local = $localDir.Name | ForEach-Object { if ($_ -match '\[(\w+)\].+') { $matches[1] } } | Sort-Object { $_.Length }, { $_ }
 
-# process new albums
-echo "Process new albums."
+# get lyrics
+echo "Get local lyrics."
+$lrcDir = $localDir | Where-Object { Get-ChildItem -LiteralPath $_.FullName "*.lrc" -Recurse }
+$lrc = $lrcDir.Name | ForEach-Object { if ($_ -match '\[(\w+)\].+') { $matches[1] } }
+
+# update albums
 foreach ($code in $local) {
-    $new = $true
-    foreach ($series in $asmr) {
-        if ($code -in $series.albums.code) {
-        # if found in database, do nothing
-            $new = $false
-            break
-        }
-    }
-    if ($new) {
-    # if new, process
-        # get series of album
-        $series = Get-Series $code
-        # mark excluded series
-        $series.excl = $series.code -in $exclSeries
-        # echo
-        echo "New album [$code] add to$(($series.code -in $asmr.code)?'':' new') series [$($series.code)]."
-        if ($series.code -notin $asmr.code) {
-        # if series not in database, append
-            $asmr += $series
-        }
-        if ($series.excl) {
-        # if series excluded, get album and append
-            $album = Get-Album $code
-            # do not append if error
-            if ($album.title -ne "Get-Album.Error.Title") {
-                foreach ($series_ in $asmr) {
-                    if ($series_.code -eq $series.code) {
-                        $series_.albums += $album
-                    }
-                }
-            }
+    if (-not $asmr.$code) {
+        # new album
+        $asmr.$code = Get-Album $code
+        echo "New album: [$code] $($asmr.$code.title)"
+    } elseif ($Lyrics) {
+        # update lyrics
+        if (($code -notin $lrc) -and (-not $asmr.$code.trans)) {
+            $asmr.$code = Get-Album $code
+            echo "Check lyrics: [$code] $($asmr.$code.title)"
         }
     }
 }
-
-# update series
-foreach ($series in $asmr) {
-    if (-not $series.excl) {
-    # get albums of series, skip excluded
-        echo "Update series [$($series.code)]."
-        $series.albums = Get-Albums $series.code
-    }
-    # mark archived and excluded albums
-    foreach ($album in $series.albums) {
-        $album.arch = $album.code -in $local
-        $album.excl = $album.code -in $exclAlbums
-    }
-    if ($series.excl) {
-    # if series excluded, remove unarchived albums
-        echo "Remove unarchived albums in series [$($series.code)]."
-        $series.albums = @($series.albums | Where-Object {$_.arch})
-    }
-    # sort albums
-    $series.albums = @($series.albums | Sort-Object {$_.code.Length}, {$_.code})
-}
-# remove unarchived series
-echo "Remove unarchived series."
-$asmr = @($asmr | Where-Object {$_.albums.Count -and $_.albums.arch -contains $true})
-# sort series
-echo "Sort series."
-$asmr = @($asmr | Sort-Object {$_.code})
 
 # save json
 echo "Save json."
-$asmr | ConvertTo-Json -Depth 3 | Out-File $json
+$asmr | ConvertTo-Json | Out-File $json
+
+# update series
+$series = @{}
+foreach ($code in $asmr.Values.series.code | Sort-Object -Unique) {
+    if ($code -in $exclSeries) {
+        # excluded series, collect form local
+        $series.$code = @{ code = $code }
+        $albums = $asmr.Values | Where-Object { $_.series.code -eq $code }
+        $ref = $albums | Select-Object -First 1
+        # title
+        $series.$code.title = $ref.series.title
+        # circle
+        if ($code -eq "SINGLE") {
+            $series.$code.circle = @{ code = ""; name = "" }
+        } else {
+            $series.$code.circle = $ref.circle
+        }
+        # albums
+        $series.$code.albums = $albums | ForEach-Object { @{ code = $_.code; title = $_.title; cover = $_.cover } }
+        echo "Exclude series: [$code] $($series.$code.title)"
+    } else {
+        # normal series, fetch from remote
+        $series.$code = Get-Series $code
+        echo "Update series: [$code] $($series.$code.title)"
+    }
+}
+
 # convert to markdown
 echo "Convert to markdown."
-$buffer = @()
-foreach ($series in $asmr) {
-  # details
-    # count unarchived albums
-    $count = @($series.albums | Where-Object {-not ($_.arch -or $_.excl)}).Count
-    # if any unarchived, disclose details
-    $buffer += "<p><details$(($count)?' open':'')><summary><b>$($series.title)</b></summary>`n"
-  # header
-    if ($series.excl) {
-    # if excluded, strike through series title
-        $title = "~~$($series.title)~~"
-    } else {
-    # otherwise no modification on series title
-        $title = $series.title
-    }
-    if ($series.code -eq "SINGLE") {
-    # if single, omit series link
-        $link = ""
-    } else {
-    # otherwise get series link
-        $link = "<a href='$(Get-DLsite $series.code)' target='_blank'>$($series.code)</a>"
-    }
-    $buffer += "|$link|$title|search|`n|-|-|:-:|"
-  # data
-    foreach ($album in $series.albums) {
-        if ($album.arch) {
-            if ($album.excl) {
-            # if archived and excluded, strike through album title
-                $title = "~~$($album.title)~~"
-            } else {
-            # if archived and not excluded, no modification on album title
-                $title = $album.title
-            }
+$buffer = Html-Style
+# for each series, sorted by circle name
+foreach ($code in $series.Values.code | Sort-Object { $series.$_.circle.name }) {
+    # open details by default or not
+    $open = $false
+    # array of albums, string[][]
+    # each string[] is a table data representing an album
+    $albums = @()
+    # for each album
+    foreach ($album in $series.$code.albums) {
+        # skip excluded albums
+        if ($album.code -in $exclAlbums) { continue }
+        # determine album type, add and translate will open the details by default
+        if ($album.code -notin $local) {
+            # -local
+            $open = $true
+            $type = "add"
+        } elseif ($Lyrics -and $album.code -notin $lrc -and $asmr.($album.code).trans) {
+            # +local, -lrc and +trans
+            $open = $true
+            $type = "translate"
         } else {
-            if ($album.excl) {
-            # if not archived and excluded, omit album
-                $title = ""
-            } else {
-            # if not archived and not excluded, bold album title
-                $title = "**$($album.title)**"
-            }
+            # +local, +lrc or -trans
+            $type = "search"
         }
-        # get album link
-        $link = "<a href='$(Get-DLsite $album.code)' target='_blank'>$($album.code)</a>"
-        # get search link
-        $search = "<a href='$(Get-ASMR $album.code)' target='_blank'>:mag:</a>"
-        if ($title) {
-            $buffer += "|$link|$title|$search|"
-        }
+        # append album table data
+        $albums += , (Html-Album $album $type)
     }
-  # details end
-    $buffer += "</details></p>`n"
+    # arrange albums in rows
+    $buffer += Html-Series $series.$code $open $albums
 }
+
 # save markdown
-echo "Save Markdown."
+echo "Save markdown."
 $buffer | Out-File $md
-# open markdown
-Start-Process gvim "$md -c `"normal ,mt`""
+
+# view markdown
+Start-Process nvim "$md +normal,v" -Wait -NoNewWindow
 
 return
 
