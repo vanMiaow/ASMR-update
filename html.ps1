@@ -91,9 +91,12 @@ function Html-Span([string]$inner, [bool]$bold = $false) {
     )
 }
 
-# image, single-line
-function Html-Img([string]$src) {
-    return "<img src='$src'>"
+# image lazy? loaded, single-line
+function Html-Img([string]$src, [bool]$lazy = $false) {
+    if ($lazy) {
+        $load = " loading='lazy'"
+    }
+    return "<img$load src='$src'>"
 }
 
 # link with icon, search code in DLsite (type = dlsite) or ASMR (type = search, translate, add), single-line
@@ -120,7 +123,7 @@ function Html-Album([hashtable]$album, [string]$type) {
     # table data
     return Html-Tag "td" @(
         # cover
-        Html-Tag "div" (Html-Img $album.cover)
+        Html-Tag "div" (Html-Img $album.cover $true)
         # title, bold when type is translate or add
         Html-Span $album.title ($type -ne "search")
         # links of DLsite and ASMR
