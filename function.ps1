@@ -85,13 +85,13 @@ function Get-Series([string]$code) {
         $res = Get-Response (Get-DLsite $code $page)
         if (-not $title) { # first
             # match title
-            if ($res -match '<span itemprop="name">「(.+)」シリーズ</span>') {
+            if ($res -match '<span>「(.+)」シリーズ</span>') {
                 $title = $matches[1]
             } else {
                 $title = "Error.Get-Series.Title"
             }
             # match circle
-            if ($res -match '<a.+\s+href=".+/maker_id/(\w+).html">\s+<span itemprop="name">(.+)</span>') {
+            if ($res -match '<a href=".+/maker_id/(\w+).html">\s+<span>(.+)</span>') {
                 $circle = @{ code = $matches[1]; name = $matches[2] }
             } else {
                 $circle = @{ code = "Error.Get-Series.Circle.Code"; name = "Error.Get-Series.Circle.Name" }
