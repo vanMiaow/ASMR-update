@@ -77,7 +77,7 @@ foreach ($code in $asmr.Values.series.code | Sort-Object -Unique) {
     if ($code -in $exclSeries) {
         # excluded series, collect form local
         $series.$code = @{ code = $code }
-        $albums = $asmr.Values | Where-Object { $_.series.code -eq $code }
+        $albums = $asmr.Values | Where-Object { $_.series.code -eq $code } | Sort-Object { $_.code.Length }, { $_.code }
         $ref = $albums | Select-Object -First 1
         # title
         $series.$code.title = $ref.series.title
