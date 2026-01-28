@@ -16,7 +16,7 @@ param(
 . "$PSScriptRoot/exclude.ps1"
 . "$PSScriptRoot/function.ps1"
 . "$PSScriptRoot/html.ps1"
-$lib  = "$PSScriptRoot/.."
+$lib  = (Get-Location).Path
 $json = "$PSScriptRoot/asmr.json"
 $md   = "$PSScriptRoot/asmr.md"
 

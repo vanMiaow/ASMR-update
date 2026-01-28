@@ -41,13 +41,13 @@ function Get-Album([string]$code) {
         $title = "Error.Get-Album.Title"
     }
     # match circle
-    if ($res -match '<a href=".+/maker_id/(\w+).html">(.+)</a>') {
+    if ($res -match '<span itemprop="brand" class="maker_name">\s+<a href=".+/maker_id/(\w+).html">(.+)</a>\s+</span>') {
         $circle = @{ code = $matches[1]; name = $matches[2] }
     } else {
         $circle = @{ code = "Error.Get-Album.Circle.Code"; name = "Error.Get-Album.Circle.Name" }
     }
     # match series
-    if ($res -match '<a href=".+/title_id/(\w+)/.+titles">(.+)</a>') {
+    if ($res -match '<th>シリーズ名</th>\s+<td>\s+<a href=".+/title_id/(\w+)/.+all">(.+)</a></td>') {
         $series = @{ code = $matches[1]; title = $matches[2] }
     } else {
         $series = @{ code = "SINGLE"; title = "Single" }
@@ -59,7 +59,7 @@ function Get-Album([string]$code) {
         $artist = "Error.Get-Album.Artist"
     }
     # match cover
-    if ($res -match '<div data-src="(.+img_main.jpg)".+></div>') {
+    if ($res -match '<meta itemprop="image" content="(.+)">') {
         $cover = "https:" + $matches[1]
     } else {
         $cover = "Error.Get-Album.Cover"
@@ -102,7 +102,7 @@ function Get-Series([string]$code) {
             $albums += @{ code = $_.Groups[2].Value; title = $_.Groups[3].Value; cover = "https:" + $_.Groups[1].Value }
         }
         # check next page
-        if ($res -notmatch '<a href=".+" data-value=".+">次へ</a>') {
+        if ($res -notmatch '<a href=".+" data-value="\d+">次へ</a>') {
             break # last page, return
         }
     }
