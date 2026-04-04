@@ -35,31 +35,31 @@ function Get-Album([string]$code) {
     # web request
     $res = Get-Response (Get-DLsite $code)
     # match title
-    if ($res -match '<h1 itemprop="name" id="work_name">(.+)</h1>') {
+    if ($res -match '<h1 itemprop="name" id="work_name">(.+?)</h1>') {
         $title = $matches[1]
     } else {
         $title = "Error.Get-Album.Title"
     }
     # match circle
-    if ($res -match '<span itemprop="brand" class="maker_name">\s+<a href=".+/maker_id/(\w+).html">(.+)</a>\s+</span>') {
+    if ($res -match '<span itemprop="brand" class="maker_name">\s+?<a href=".+?/maker_id/(\w+?).html">(.+?)</a>\s+?</span>') {
         $circle = @{ code = $matches[1]; name = $matches[2] }
     } else {
         $circle = @{ code = "Error.Get-Album.Circle.Code"; name = "Error.Get-Album.Circle.Name" }
     }
     # match series
-    if ($res -match '<th>シリーズ名</th>\s+<td>\s+<a href=".+/title_id/(\w+)/.+all">(.+)</a></td>') {
+    if ($res -match '<th>シリーズ名</th>\s+?<td>\s+?<a href=".+?/title_id/(\w+?)/.+?all">(.+?)</a></td>') {
         $series = @{ code = $matches[1]; title = $matches[2] }
     } else {
         $series = @{ code = "SINGLE"; title = "Single" }
     }
     # match artist
-    if ($res -match '<th>声優</th>\s+<td>(?s:.+?)</td>') {
-        $artist = (([regex]'>(.+)</a>').Matches($matches[0]) | ForEach-Object { $_.Groups[1].Value }) -join " / "
+    if ($res -match '<th>声優</th>\s+?<td>(?s:.+?)</td>') {
+        $artist = (([regex]'>(.+?)</a>').Matches($matches[0]) | ForEach-Object { $_.Groups[1].Value }) -join " / "
     } else {
         $artist = "Error.Get-Album.Artist"
     }
     # match cover
-    if ($res -match '<meta itemprop="image" content="(.+)">') {
+    if ($res -match '<meta itemprop="image" content="(.+?)">') {
         $cover = "https:" + $matches[1]
     } else {
         $cover = "Error.Get-Album.Cover"
@@ -85,24 +85,24 @@ function Get-Series([string]$code) {
         $res = Get-Response (Get-DLsite $code $page)
         if (-not $title) { # first
             # match title
-            if ($res -match '<span>「(.+)」シリーズ</span>') {
+            if ($res -match '<span>「(.+?)」シリーズ</span>') {
                 $title = $matches[1]
             } else {
                 $title = "Error.Get-Series.Title"
             }
             # match circle
-            if ($res -match '<a href=".+/maker_id/(\w+).html">\s+<span>(.+)</span>') {
+            if ($res -match '<a href=".+?/maker_id/(\w+?).html">\s+?<span>(.+?)</span>') {
                 $circle = @{ code = $matches[1]; name = $matches[2] }
             } else {
                 $circle = @{ code = "Error.Get-Series.Circle.Code"; name = "Error.Get-Series.Circle.Name" }
             }
         }
         # match albums
-        ([regex]'<img src=".+" :src="is_show.+(//img.+/(\w+)_img_main.jpg).+" alt="(.+) \[.+\]">').Matches($res) | ForEach-Object {
+        ([regex]'<img src=".+?" :src="is_show.+?(//img.+?/(\w+?)_img_main.jpg).+?" alt="(.+?) \[.+?\]"').Matches($res) | ForEach-Object {
             $albums += @{ code = $_.Groups[2].Value; title = $_.Groups[3].Value; cover = "https:" + $_.Groups[1].Value }
         }
         # check next page
-        if ($res -notmatch '<a href=".+" data-value="\d+">次へ</a>') {
+        if ($res -notmatch '<a href=".+?" data-value="\d+?">次へ</a>') {
             break # last page, return
         }
     }
