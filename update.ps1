@@ -58,12 +58,10 @@ foreach ($code in $local) {
         # new album
         $asmr.$code = Get-Album $code
         echo "New album: [$code] $($asmr.$code.title)"
-    } elseif ($Lyrics) {
+    } elseif ($Lyrics -and (-not $asmr.$code.trans)) {
         # update lyrics
-        if (($code -notin $lrc) -and (-not $asmr.$code.trans)) {
-            $asmr.$code = Get-Album $code
-            echo "Check lyrics: [$code] $($asmr.$code.title)"
-        }
+        $asmr.$code = Get-Album $code
+        echo "Check lyrics: [$code] $($asmr.$code.title)"
     }
 }
 
@@ -116,9 +114,9 @@ foreach ($code in $series.Values.code | Sort-Object { $series.$_.circle.name }) 
             # -local
             $open = $true
             $type = "add"
-        } elseif ($Lyrics -and $album.code -notin $lrc -and $asmr.($album.code).trans) {
+        } elseif ($Lyrics -and ($album.code -notin $lrc) -and $asmr.($album.code).trans) {
             # +local, -lrc and +trans
-            $open = $true
+            $open = $album.code -notin $exclLyrics
             $type = "translate"
         } else {
             # +local, +lrc or -trans
