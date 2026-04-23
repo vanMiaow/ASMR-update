@@ -65,7 +65,7 @@ function Get-Album([string]$code) {
         $cover = "Error.Get-Album.Cover"
     }
     # match translation
-    if ($res -match '<div class="work_edition_linklist type_trans">(?s:.+?)</div>' -and $matches[0] -match '中文') {
+    if ($res -match '"lang":"CHI_HAN(S|T)"') {
         $trans = $true
     } else {
         $trans = $false
